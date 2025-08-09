@@ -4,25 +4,21 @@ using System.Text;
 
 namespace GitObjects
 {
-    class HashObject
-    {
-        public string hash { get; private set; }
-        public string dir { get; private set; }
-        public string filename { get; private set; }
-        public string filepath { get => dir + filename; }
-
-        public HashObject(string hash)
-        {
-            this.hash = hash;
-            dir = $".git/objects/{hash[..2]}/";
-            filename = $"{hash[2..]}";
-        }
-    }
-
-    class Blob : HashObject
+    class Blob : GitObject
     {
         byte[] content;
 
+        // Load a blob object
+        public Blob(string hash) : base(hash)
+        {
+            using FileStream fStream = new(filepath, FileMode.Open, FileAccess.Read);
+            using ZLibStream zlStream = new(fStream, CompressionMode.Decompress);
+            using MemoryStream mStream = new MemoryStream();
+            zlStream.CopyTo(mStream);
+            content = mStream.ToArray();
+        }
+
+        // Create a blob object from a text file
         private Blob(byte[] content)
             : base(Convert.ToHexString(SHA1.HashData(content)).ToLower())
         {
@@ -37,6 +33,7 @@ namespace GitObjects
             return new Blob([.. header, .. content]);
         }
 
+        // Write the blob object to the .git/objects folder
         public void WriteBlob()
         {
             Directory.CreateDirectory(dir);
@@ -44,6 +41,12 @@ namespace GitObjects
             using FileStream fStream = new FileStream(filepath, FileMode.Create, FileAccess.Write);
             using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
             zlStream.Write(content);
+        }
+
+        // Get content as a string
+        public string GetString()
+        {
+            return Encoding.UTF8.GetString(content);
         }
     }
 }

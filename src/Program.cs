@@ -1,5 +1,4 @@
 ﻿using System.IO.Compression;
-using System.Text;
 using GitObjects;
 
 if (args.Length < 1)
@@ -26,11 +25,8 @@ else if (command == "cat-file")
         return;
     }
 
-    HashObject file = new HashObject(args[2]);
-    FileStream fStream = new(file.filepath, FileMode.Open, FileAccess.Read);
-    ZLibStream zlStream = new(fStream, CompressionMode.Decompress);
-    StreamReader reader = new(zlStream, Encoding.UTF8);
-    Console.Write(reader.ReadToEnd().Split("\0")[1]);
+    Blob blob = new Blob(args[2]);
+    Console.Write(blob.GetString().Split("\0")[1]);
 }
 else if (command == "hash-object")
 {
