@@ -1,30 +1,42 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace GitObjects
 {
     class Blob : GitObject
     {
-        byte[] content;
-
-        // Load a blob object
+        public int size { get; private set; }
+        public string fileContent { get; private set; }
+        
         public Blob(string hash) : base(hash)
         {
-            using FileStream fStream = new(filepath, FileMode.Open, FileAccess.Read);
-            using ZLibStream zlStream = new(fStream, CompressionMode.Decompress);
-            using MemoryStream mStream = new MemoryStream();
-            zlStream.CopyTo(mStream);
-            content = mStream.ToArray();
+            ParseBlob();
+        }
+
+        public Blob(byte[] content) : base(content)
+        {
+            ParseBlob();
+        }
+
+        // Blob format: blob <size>\0<content>
+        [MemberNotNull("size", "fileContent")]
+        private void ParseBlob()
+        {
+            string[] blobStr = GetString().Split(' ', 2);
+            if (blobStr[0] != "blob") throw new InvalidOperationException($"Not a blob: {hash}");
+
+            // Get the size
+            blobStr = blobStr[1].Split('\0', 2);
+            int tmp;
+            if (!int.TryParse(blobStr[0], out tmp)) throw new InvalidFormatException($"Invalid size {blobStr[0]} for {hash}");
+            size = tmp;
+
+            // Get the content
+            fileContent = blobStr[2];
         }
 
         // Create a blob object from a text file
-        private Blob(byte[] content)
-            : base(Convert.ToHexString(SHA1.HashData(content)).ToLower())
-        {
-            this.content = content;
-        }
-
         public static Blob FromFile(string filename)
         {
             string fileContent = File.ReadAllText(filename);
@@ -41,12 +53,6 @@ namespace GitObjects
             using FileStream fStream = new FileStream(filepath, FileMode.Create, FileAccess.Write);
             using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
             zlStream.Write(content);
-        }
-
-        // Get content as a string
-        public string GetString()
-        {
-            return Encoding.UTF8.GetString(content);
         }
     }
 }

@@ -1,5 +1,4 @@
-﻿using System.IO.Compression;
-using GitObjects;
+﻿using GitObjects;
 
 if (args.Length < 1)
 {
@@ -26,7 +25,7 @@ else if (command == "cat-file")
     }
 
     Blob blob = new Blob(args[2]);
-    Console.Write(blob.GetString().Split("\0")[1]);
+    Console.Write(blob.content);
 }
 else if (command == "hash-object")
 {
