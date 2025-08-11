@@ -25,7 +25,7 @@ else if (command == "cat-file")
     }
 
     Blob blob = new Blob(args[2]);
-    Console.Write(blob.content);
+    Console.Write(blob.fileContent);
 }
 else if (command == "hash-object")
 {
@@ -38,6 +38,19 @@ else if (command == "hash-object")
     Blob blob = Blob.FromFile(args[2]);
     Console.WriteLine(blob.hash);
     blob.WriteBlob();
+}
+else if (command == "ls-tree")
+{
+    if (args.Length < 3 || args[1] != "--name-only")
+    {
+        Console.WriteLine("Please provide a tree");
+        return;
+    }
+
+    foreach (var entry in new Tree(args[2]).Entries())
+    {
+        Console.WriteLine(entry.name);
+    }
 }
 else
 {

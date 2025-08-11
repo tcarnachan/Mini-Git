@@ -33,7 +33,7 @@ namespace GitObjects
             size = tmp;
 
             // Get the content
-            fileContent = blobStr[2];
+            fileContent = blobStr[1];
         }
 
         // Create a blob object from a text file
