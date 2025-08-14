@@ -15,6 +15,8 @@ namespace GitObjects
         public string filename { get; private set; }
         public string filepath { get => dir + filename; }
 
+        public (string type, int size) header { get; private set; }
+        private byte[] headerBytes;
         public byte[] content { get; private set; }
 
         // Read a git object from .git/obects
@@ -23,18 +25,39 @@ namespace GitObjects
             this.hash = hash;
             SetPath(hash);
 
+            // Read bytes
             using FileStream fStream = new(filepath, FileMode.Open, FileAccess.Read);
             using ZLibStream zlStream = new(fStream, CompressionMode.Decompress);
             using MemoryStream mStream = new MemoryStream();
             zlStream.CopyTo(mStream);
-            content = mStream.ToArray();
+
+            // Get the content as a byte[]
+            byte[] bytes = mStream.ToArray();
+            int split = Array.IndexOf(bytes, (byte)0);
+            content = bytes[(split + 1)..];
+
+            // Get the header as (type, size)
+            headerBytes = bytes[..split];
+            SetHeader();
         }
 
-        public GitObject(byte[] content)
+        public GitObject(byte[] headerBytes, byte[] contentBytes)
         {
-            this.content = content;
-            hash = Convert.ToHexString(SHA1.HashData(content)).ToLower();
+            hash = Convert.ToHexStringLower(SHA1.HashData([.. headerBytes, .. contentBytes]));
+            this.headerBytes = headerBytes;
+            this.content = contentBytes;
             SetPath(hash);
+            SetHeader();
+        }
+
+        [MemberNotNull("header")]
+        private void SetHeader()
+        {
+            // Get the header as (type, size)
+            string[] headerArr = Encoding.UTF8.GetString(headerBytes).Split();
+            int size;
+            if (!int.TryParse(headerArr[1], out size)) throw new InvalidFormatException($"Invalid size {headerArr[1]} for {hash}");
+            header = (headerArr[0], size);
         }
 
         [MemberNotNull("dir", "filename")]
@@ -44,12 +67,6 @@ namespace GitObjects
             filename = $"{hash[2..]}";
         }
 
-        // Get content as a string
-        public string GetString()
-        {
-            return Encoding.UTF8.GetString(content);
-        }
-
         // Write object to the .git/objects folder
         public virtual void Write()
         {
@@ -57,7 +74,7 @@ namespace GitObjects
 
             using FileStream fStream = new FileStream(filepath, FileMode.Create, FileAccess.Write);
             using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
-            zlStream.Write(content);
+            zlStream.Write([.. headerBytes, .. content]);
         }
     }
 

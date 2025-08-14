@@ -4,7 +4,6 @@ namespace GitObjects
 {
     class Tree : GitObject
     {
-        private int size;
         private List<TreeEntry> entries = new List<TreeEntry>();
         private List<Tree> subTrees = new List<Tree>();
 
@@ -13,7 +12,7 @@ namespace GitObjects
             ParseTree();
         }
 
-        public Tree(byte[] content, List<Tree> subTrees) : base(content)
+        public Tree(byte[] header, byte[] content, List<Tree> subTrees) : base(header, content)
         {
             ParseTree();
             this.subTrees = subTrees;
@@ -23,19 +22,13 @@ namespace GitObjects
         // Mode: 40000 for directories, 100644 for text files
         private void ParseTree()
         {
-            int split = Array.IndexOf(content, (byte)0);
-            string[] treeSize = Encoding.UTF8.GetString(content[..split]).Split();
-            if (treeSize[0] != "tree") throw new InvalidOperationException($"Not a tree: {hash}");
-            // Get the size
-            int tmp;
-            if (!int.TryParse(treeSize[1], out tmp)) throw new InvalidFormatException($"Invalid size {treeSize[1]} for {hash}");
-            size = tmp;
+            if (header.type != "tree") throw new InvalidOperationException($"Not a tree: {hash}");
 
-            byte[] entries = content[(split + 1)..];
+            byte[] entries = content;
             while (entries.Length > 0)
             {
                 // Get until next null byte
-                split = Array.IndexOf(entries, (byte)0);
+                int split = Array.IndexOf(entries, (byte)0);
                 string[] modeName = Encoding.UTF8.GetString(entries[..split]).Split();
                 entries = entries[(split + 1)..]; // +1 to skip the null byte
 
@@ -79,8 +72,6 @@ namespace GitObjects
             byte[] header = Encoding.UTF8.GetBytes($"tree {treeSize}\0");
             byte[] content = new byte[treeSize];
             int startIx = 0;
-            Console.WriteLine(string.Join(", ", tree.Keys));
-            Console.WriteLine(string.Join(", ", tree.Keys.OrderBy(k => k)));
             foreach (string entryKey in tree.Keys.OrderBy(k => k))
             {
                 byte[] entryBytes = tree[entryKey];
@@ -88,7 +79,7 @@ namespace GitObjects
                 startIx += entryBytes.Length;
             }
 
-            return new Tree([.. header, .. content], subTrees);
+            return new Tree(header, content, subTrees);
         }
 
         public override void Write()
