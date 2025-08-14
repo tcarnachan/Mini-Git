@@ -53,8 +53,8 @@ namespace GitObjects
         {
             List<Tree> subTrees = new List<Tree>();
             int skip = directory.Length + 1;
-            // StringBuilder tree = new();
-            List<byte> tree = new List<byte>();
+            Dictionary<string, byte[]> tree = new Dictionary<string, byte[]>();
+            int treeSize = 0;
 
             foreach (string dir in Directory.EnumerateDirectories(directory))
             {
@@ -62,23 +62,33 @@ namespace GitObjects
                 {
                     Tree subTree = FromDirectory(dir);
                     subTrees.Add(subTree);
-                    tree.AddRange(Encoding.UTF8.GetBytes($"40000 {dir[skip..]}\0"));
-                    tree.AddRange(Convert.FromHexString(subTree.hash));
-                    // tree.AppendFormat("40000 {0}\0{1}", dir[skip..], Convert.FromHexString(subTree.hash));
+                    byte[] entry = [.. Encoding.UTF8.GetBytes($"40000 {dir[skip..]}\0"),
+                                    .. Convert.FromHexString(subTree.hash)];
+                    tree[dir[skip..]] = entry;
+                    treeSize += entry.Length;
                 }
             }
             foreach (string file in Directory.EnumerateFiles(directory))
             {
-                tree.AddRange(Encoding.UTF8.GetBytes($"100644 {file[skip..]}\0"));
-                tree.AddRange(Convert.FromHexString(Blob.FromFile(file).hash));
-                // tree.AppendFormat("100644 {0}\0{1}", file[skip..], Encoding.UTF8.GetBytes(Blob.FromFile(file).hash));
+                byte[] entry = [.. Encoding.UTF8.GetBytes($"100644 {file[skip..]}\0"),
+                                .. Convert.FromHexString(Blob.FromFile(file).hash)];
+                tree[file[skip..]] = entry;
+                treeSize += entry.Length;
             }
 
-            // byte[] content = Encoding.UTF8.GetBytes(tree.ToString());
-            // byte[] header = Encoding.UTF8.GetBytes($"tree {content.Length}\0");
-            byte[] header = Encoding.UTF8.GetBytes($"tree {tree.Count}\0");
+            byte[] header = Encoding.UTF8.GetBytes($"tree {treeSize}\0");
+            byte[] content = new byte[treeSize];
+            int startIx = 0;
+            Console.WriteLine(string.Join(", ", tree.Keys));
+            Console.WriteLine(string.Join(", ", tree.Keys.OrderBy(k => k)));
+            foreach (string entryKey in tree.Keys.OrderBy(k => k))
+            {
+                byte[] entryBytes = tree[entryKey];
+                Array.Copy(entryBytes, 0, content, startIx, entryBytes.Length);
+                startIx += entryBytes.Length;
+            }
 
-            return new Tree([.. header, .. tree.ToArray()], subTrees);
+            return new Tree([.. header, .. content], subTrees);
         }
 
         public override void Write()
