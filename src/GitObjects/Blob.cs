@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.IO.Compression;
 using System.Text;
 
 namespace GitObjects
@@ -43,16 +42,6 @@ namespace GitObjects
             byte[] content = Encoding.UTF8.GetBytes(fileContent);
             byte[] header = Encoding.UTF8.GetBytes($"blob {content.Length}\0");
             return new Blob([.. header, .. content]);
-        }
-
-        // Write the blob object to the .git/objects folder
-        public void WriteBlob()
-        {
-            Directory.CreateDirectory(dir);
-
-            using FileStream fStream = new FileStream(filepath, FileMode.Create, FileAccess.Write);
-            using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
-            zlStream.Write(content);
         }
     }
 }

@@ -49,6 +49,16 @@ namespace GitObjects
         {
             return Encoding.UTF8.GetString(content);
         }
+
+        // Write object to the .git/objects folder
+        public virtual void Write()
+        {
+            Directory.CreateDirectory(dir);
+
+            using FileStream fStream = new FileStream(filepath, FileMode.Create, FileAccess.Write);
+            using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
+            zlStream.Write(content);
+        }
     }
 
     class InvalidFormatException : Exception

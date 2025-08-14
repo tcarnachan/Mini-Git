@@ -37,7 +37,7 @@ else if (command == "hash-object")
 
     Blob blob = Blob.FromFile(args[2]);
     Console.WriteLine(blob.hash);
-    blob.WriteBlob();
+    blob.Write();
 }
 else if (command == "ls-tree")
 {
@@ -51,6 +51,12 @@ else if (command == "ls-tree")
     {
         Console.WriteLine(entry.name);
     }
+}
+else if (command == "write-tree")
+{
+    Tree tree = Tree.FromDirectory(Directory.GetCurrentDirectory());
+    tree.Write();
+    Console.WriteLine(tree.hash);
 }
 else
 {
