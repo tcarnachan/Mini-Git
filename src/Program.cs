@@ -26,7 +26,6 @@ RootCommand root = new("Mini-Git");
 Command initCommand = new("init", "Initialise a new repository");
 initCommand.SetAction(pr =>
 {
-    Console.WriteLine(pr);
     Directory.CreateDirectory(".git");
     Directory.CreateDirectory(".git/objects");
     Directory.CreateDirectory(".git/refs");
@@ -145,10 +144,33 @@ Command commitCommand = new("commit",
     "Commit current directory to main") { msgOpt };
 commitCommand.SetAction(pr =>
 {
-    Commit commit = Commit.FromCurrent(pr.GetValue(msgOpt) ?? "");
-    commit.Write();
-    Console.WriteLine(commit.hash);
+    Commit commit;
+    if (Commit.TryFromCurrent(pr.GetValue(msgOpt) ?? "", out commit))
+    {
+        commit.Write();
+        Console.WriteLine(commit.hash);
+    }
 });
 root.Add(commitCommand);
+
+// log command
+Command logCommand = new("log", "Show commit logs");
+logCommand.SetAction(pr =>
+{
+    if (!File.Exists(Commit.mainPath))
+    {
+        Console.WriteLine("fatal: no commits found");
+        return;
+    }
+    string commitHash = File.ReadAllText(Commit.mainPath).Trim();
+    while (commitHash != "")
+    {
+        Console.WriteLine("---");
+        Commit commit = new Commit(commitHash);
+        Console.WriteLine(commit);
+        commitHash = commit.parent;
+    }
+});
+root.Add(logCommand);
 
 int status = root.Parse(args).Invoke();

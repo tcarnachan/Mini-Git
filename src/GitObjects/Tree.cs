@@ -11,7 +11,6 @@ namespace GitObjects
         }
         
         private List<TreeEntry> entries = new List<TreeEntry>();
-        private List<string> subTrees = new List<string>();
 
         public Tree(string hash) : base(hash)
         {
@@ -48,7 +47,6 @@ namespace GitObjects
 
                 // Add to list
                 this.entries.Add(new TreeEntry(modeName[0], modeName[1], hash));
-                if (modeName[0] == Mode.DIR) subTrees.Add(modeName[1]);
             }
         }
 
@@ -90,11 +88,13 @@ namespace GitObjects
             return new Tree(header, content);
         }
 
-        public override void Write()
+        public override void Write(string path = "")
         {
-            foreach (string subTree in subTrees)
+            foreach (TreeEntry entry in entries)
             {
-                FromDirectory(subTree).Write();
+                string filepath = Path.Join(path, entry.name);
+                if (entry.mode == Mode.DIR) FromDirectory(filepath).Write(filepath);
+                else Blob.FromFile(filepath).Write();
             }
             base.Write();
         }
