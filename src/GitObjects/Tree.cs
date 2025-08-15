@@ -4,25 +4,35 @@ namespace GitObjects
 {
     class Tree : GitObject
     {
+        public static class Mode
+        {
+            public const string DIR = "40000";
+            public const string FILE = "100644";
+        }
+        
         private List<TreeEntry> entries = new List<TreeEntry>();
-        private List<Tree> subTrees = new List<Tree>();
+        private List<string> subTrees = new List<string>();
 
         public Tree(string hash) : base(hash)
         {
             ParseTree();
         }
 
-        public Tree(byte[] header, byte[] content, List<Tree> subTrees) : base(header, content)
+        public Tree(byte[] header, byte[] content) : base(header, content)
         {
             ParseTree();
-            this.subTrees = subTrees;
+        }
+
+        public Tree(GitObject go) : base(go)
+        {
+            ParseTree();
         }
 
         // Tree format: tree <size>\0<mode> <name>\0<20_byte_sha><mode> <name>\0<20_byte_sha>
         // Mode: 40000 for directories, 100644 for text files
         private void ParseTree()
         {
-            if (header.type != "tree") throw new InvalidOperationException($"Not a tree: {hash}");
+            if (header.type != ObjectType.TREE) throw new InvalidOperationException($"Not a tree: {hash}");
 
             byte[] entries = content;
             while (entries.Length > 0)
@@ -38,14 +48,14 @@ namespace GitObjects
 
                 // Add to list
                 this.entries.Add(new TreeEntry(modeName[0], modeName[1], hash));
+                if (modeName[0] == Mode.DIR) subTrees.Add(modeName[1]);
             }
         }
 
         // Create a tree object from a directory
         public static Tree FromDirectory(string directory)
         {
-            List<Tree> subTrees = new List<Tree>();
-            int skip = directory.Length + 1;
+            int skip = directory.Length + (directory.EndsWith("/") ? 0 : 1);
             Dictionary<string, byte[]> tree = new Dictionary<string, byte[]>();
             int treeSize = 0;
 
@@ -53,17 +63,15 @@ namespace GitObjects
             {
                 if (dir.Split('/').LastOrDefault("") != ".git") // Skip the .git/ folder
                 {
-                    Tree subTree = FromDirectory(dir);
-                    subTrees.Add(subTree);
-                    byte[] entry = [.. Encoding.UTF8.GetBytes($"40000 {dir[skip..]}\0"),
-                                    .. Convert.FromHexString(subTree.hash)];
+                    byte[] entry = [.. Encoding.UTF8.GetBytes($"{Mode.DIR} {dir[skip..]}\0"),
+                                    .. Convert.FromHexString(FromDirectory(dir).hash)];
                     tree[dir[skip..]] = entry;
                     treeSize += entry.Length;
                 }
             }
             foreach (string file in Directory.EnumerateFiles(directory))
             {
-                byte[] entry = [.. Encoding.UTF8.GetBytes($"100644 {file[skip..]}\0"),
+                byte[] entry = [.. Encoding.UTF8.GetBytes($"{Mode.FILE} {file[skip..]}\0"),
                                 .. Convert.FromHexString(Blob.FromFile(file).hash)];
                 tree[file[skip..]] = entry;
                 treeSize += entry.Length;
@@ -79,14 +87,14 @@ namespace GitObjects
                 startIx += entryBytes.Length;
             }
 
-            return new Tree(header, content, subTrees);
+            return new Tree(header, content);
         }
 
         public override void Write()
         {
-            foreach (Tree subTree in subTrees)
+            foreach (string subTree in subTrees)
             {
-                subTree.Write();
+                FromDirectory(subTree).Write();
             }
             base.Write();
         }
@@ -103,7 +111,7 @@ namespace GitObjects
     struct TreeEntry
     {
         public string mode { get; }
-        public string name {get; }
+        public string name { get; }
         public string hash { get; }
 
         public TreeEntry(string mode, string name, string hash)

@@ -1,12 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace GitObjects
 {
     class Blob : GitObject
-    {
-        public string fileContent { get; private set; }
-        
+    {   
         public Blob(string hash) : base(hash)
         {
             ParseBlob();
@@ -18,13 +15,9 @@ namespace GitObjects
         }
 
         // Blob format: blob <size>\0<content>
-        [MemberNotNull("fileContent")]
         private void ParseBlob()
         {
-            if (header.type != "blob") throw new InvalidOperationException($"Not a blob: {hash}");
-
-            // Get the content
-            fileContent = Encoding.UTF8.GetString(content);
+            if (header.type != ObjectType.BLOB) throw new InvalidOperationException($"Not a blob: {hash}");
         }
 
         // Create a blob object from a text file

@@ -1,64 +1,147 @@
 ﻿using GitObjects;
+using System.CommandLine;
+using System.CommandLine.Parsing;
 
-if (args.Length < 1)
+void ValidateExactlyOne(CommandResult res, params Option[] opts)
 {
-    Console.WriteLine("Please provide a command");
-    return;
+    if (opts.Count(opt => res.GetResult(opt) is not null) != 1)
+    {
+        string list = string.Join(", ", opts.Select(o => o.Name));
+        res.AddError($"Exactly one of {list} is required");
+    }
 }
 
-string command = args[0];
-
-if (command == "init")
+void ValidateAtMostOne(CommandResult res, params Option[] opts)
 {
+    if (opts.Count(opt => res.GetResult(opt) is not null) > 1)
+    {
+        string list = string.Join(", ", opts.Select(o => o.Name));
+        res.AddError($"At most one of {list} can be selected");
+    }
+}
+
+RootCommand root = new("Mini-Git");
+
+// init command
+Command initCommand = new("init", "Initialise a new repository");
+initCommand.SetAction(pr =>
+{
+    Console.WriteLine(pr);
     Directory.CreateDirectory(".git");
     Directory.CreateDirectory(".git/objects");
     Directory.CreateDirectory(".git/refs");
     File.WriteAllText(".git/HEAD", "ref: refs/heads/main\n");
     Console.WriteLine("Initialized git directory");
-}
-else if (command == "cat-file")
-{
-    if (args.Length < 3 || args[1] != "-p")
-    {
-        Console.WriteLine("Please provide a file");
-        return;
-    }
+});
+root.Add(initCommand);
 
-    Blob blob = new Blob(args[2]);
-    Console.Write(blob.fileContent);
-}
-else if (command == "hash-object")
+// cat-file command
+var pCatOpt = new Option<bool>("-p", "--pretty-print") { Description = "Pretty-print object content" };
+var tCatOpt = new Option<bool>("-t", "-type") { Description = "Only show object type" };
+var sCarOpt = new Option<bool>("-s", "-size") { Description = "Only show object size" };
+var catFileArg = new Argument<string>("object")
+    { Arity = ArgumentArity.ExactlyOne, Description = "Object hash" };
+Command catFileCommand = new("cat-file",
+    "Provide contents or details of repository objects")
+    { pCatOpt, tCatOpt, sCarOpt, catFileArg };
+catFileCommand.Validators.Add(res => ValidateExactlyOne(res, pCatOpt, tCatOpt, sCarOpt));
+catFileCommand.SetAction(pr =>
 {
-    if (args.Length < 3 || args[1] != "-w")
+    GitObject gitObject = new GitObject(pr.GetValue(catFileArg) ?? "");
+    if (pr.GetValue(pCatOpt))
     {
-        Console.WriteLine("Please provide a file");
-        return;
+        if (gitObject.header.type == ObjectType.TREE)
+        {
+            Tree tree = new Tree(gitObject);
+            foreach (TreeEntry entry in tree.Entries())
+            {
+                Console.WriteLine($"{int.Parse(entry.mode):D6} {entry.hash} {entry.name}");
+            }
+        }
+        else
+        {
+            Console.WriteLine(gitObject.GetContentString());
+        }
     }
+    else if (pr.GetValue(tCatOpt)) Console.WriteLine(gitObject.header.type);
+    else Console.WriteLine(gitObject.header.size);
+});
+root.Add(catFileCommand);
 
-    Blob blob = Blob.FromFile(args[2]);
-    Console.WriteLine(blob.hash);
-    blob.Write();
-}
-else if (command == "ls-tree")
+// hash-object command
+var tHashOpt = new Option<string>("-t", "-type")
 {
-    if (args.Length < 3 || args[1] != "--name-only")
+    Description = "Type of object to hash",
+    DefaultValueFactory = pr => "blob",
+};
+tHashOpt.AcceptOnlyFromAmong(ObjectType.BLOB, ObjectType.TREE, ObjectType.COMMIT);
+var wHashOpt = new Option<bool>("-w", "-write") { Description = "Write the object into the object database" };
+var hashObjArg = new Argument<string>("file")
+    { Arity = ArgumentArity.ExactlyOne, Description = "Directory or Filename" };
+Command hashObjCommand = new("hash-object",
+    "Compute object hash and optionally create an object from a file")
+    { tHashOpt, wHashOpt, hashObjArg };
+hashObjCommand.SetAction(pr =>
+{
+    GitObject go;
+    string filename = pr.GetValue(hashObjArg) ?? "";
+    switch (pr.GetValue(tHashOpt))
     {
-        Console.WriteLine("Please provide a tree");
-        return;
+        case ObjectType.BLOB:
+            go = Blob.FromFile(filename);
+            break;
+        case ObjectType.TREE:
+            go = Tree.FromDirectory(Directory.GetCurrentDirectory() + filename);
+            break;
+        default:
+            throw new NotImplementedException(
+                $"Hashing {pr.GetValue(tHashOpt)} is not implemented yet");
     }
+    Console.WriteLine(go.hash);
+    if (pr.GetValue(wHashOpt)) go.Write();
+});
+root.Add(hashObjCommand);
 
-    foreach (var entry in new Tree(args[2]).Entries())
-    {
-        Console.WriteLine(entry.name);
-    }
-}
-else if (command == "write-tree")
+// ls-tree command
+var treeOnlyOpt = new Option<bool>("-t", "--tree-only") { Description = "Only show trees" };
+var nameOnlyOpt = new Option<bool>("-n", "--name-only") { Description = "Only list names" };
+var hashOnlyOpt = new Option<bool>("-o", "--hash-only") { Description = "Only list hashes" }; //-h is used for help
+var lsTreeArg = new Argument<string>("hash")
+    { Arity = ArgumentArity.ExactlyOne, Description = "Tree object hash" };
+Command lsTreeCommand = new("ls-tree", "List the contents of a tree object")
+    { treeOnlyOpt, nameOnlyOpt, hashOnlyOpt, lsTreeArg };
+lsTreeCommand.Validators.Add(res => ValidateAtMostOne(res, nameOnlyOpt, hashOnlyOpt));
+lsTreeCommand.SetAction(pr =>
 {
-    Tree tree = Tree.FromDirectory(Directory.GetCurrentDirectory());
+    string hash = pr.GetValue(lsTreeArg) ?? "";
+    bool treeOnly = pr.GetValue(treeOnlyOpt);
+    bool nameOnly = pr.GetValue(nameOnlyOpt);
+    bool hashOnly = pr.GetValue(hashOnlyOpt);
+    foreach (var entry in new Tree(hash).Entries())
+    {
+        if (!treeOnly || entry.mode == Tree.Mode.DIR)
+        {
+            Console.WriteLine(nameOnly ? entry.name : hashOnly ? entry.hash :
+                $"{int.Parse(entry.mode):D6} {entry.hash} {entry.name}");
+        }
+    }
+});
+root.Add(lsTreeCommand);
+
+// write-tree command
+var prefixOpt = new Option<string>("--prefix")
+    { Description = "Create a tree object from prefix directory" };
+Command writeTreeCommand = new Command("write-tree",
+    "Create a tree object from the current directory") { prefixOpt };
+writeTreeCommand.SetAction(pr =>
+{
+    Tree tree = Tree.FromDirectory(Directory.GetCurrentDirectory()
+        + (pr.GetValue(prefixOpt) ?? ""));
     tree.Write();
     Console.WriteLine(tree.hash);
-}
-else
-{
-    throw new ArgumentException($"Unknown command {command}");
-}
+});
+root.Add(writeTreeCommand);
+
+// TODO: commit command
+
+int status = root.Parse(args).Invoke();

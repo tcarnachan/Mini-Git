@@ -50,6 +50,16 @@ namespace GitObjects
             SetHeader();
         }
 
+        public GitObject(GitObject go)
+        {
+            hash = go.hash;
+            header = go.header;
+            headerBytes = go.headerBytes;
+            dir = go.dir;
+            filename = go.filename;
+            content = go.content;
+        }
+
         [MemberNotNull("header")]
         private void SetHeader()
         {
@@ -76,6 +86,15 @@ namespace GitObjects
             using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
             zlStream.Write([.. headerBytes, .. content]);
         }
+
+        public string GetContentString() => Encoding.UTF8.GetString(content);
+    }
+
+    static class ObjectType
+    {
+        public const string BLOB = "blob";
+        public const string TREE = "tree";
+        public const string COMMIT = "commit";
     }
 
     class InvalidFormatException : Exception
