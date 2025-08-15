@@ -30,7 +30,7 @@ initCommand.SetAction(pr =>
     Directory.CreateDirectory(".git");
     Directory.CreateDirectory(".git/objects");
     Directory.CreateDirectory(".git/refs");
-    File.WriteAllText(".git/HEAD", "ref: refs/heads/main\n");
+    File.WriteAllText(".git/HEAD", $"ref: {Commit.MAIN_PATH}\n");
     Console.WriteLine("Initialized git directory");
 });
 root.Add(initCommand);
@@ -74,7 +74,7 @@ var tHashOpt = new Option<string>("-t", "-type")
     Description = "Type of object to hash",
     DefaultValueFactory = pr => "blob",
 };
-tHashOpt.AcceptOnlyFromAmong(ObjectType.BLOB, ObjectType.TREE, ObjectType.COMMIT);
+tHashOpt.AcceptOnlyFromAmong(ObjectType.BLOB, ObjectType.TREE);
 var wHashOpt = new Option<bool>("-w", "-write") { Description = "Write the object into the object database" };
 var hashObjArg = new Argument<string>("file")
     { Arity = ArgumentArity.ExactlyOne, Description = "Directory or Filename" };
@@ -90,12 +90,9 @@ hashObjCommand.SetAction(pr =>
         case ObjectType.BLOB:
             go = Blob.FromFile(filename);
             break;
-        case ObjectType.TREE:
-            go = Tree.FromDirectory(Directory.GetCurrentDirectory() + filename);
-            break;
         default:
-            throw new NotImplementedException(
-                $"Hashing {pr.GetValue(tHashOpt)} is not implemented yet");
+            go = Tree.FromDirectory(Path.Join(Directory.GetCurrentDirectory(), filename));
+            break;
     }
     Console.WriteLine(go.hash);
     if (pr.GetValue(wHashOpt)) go.Write();
@@ -135,13 +132,23 @@ Command writeTreeCommand = new Command("write-tree",
     "Create a tree object from the current directory") { prefixOpt };
 writeTreeCommand.SetAction(pr =>
 {
-    Tree tree = Tree.FromDirectory(Directory.GetCurrentDirectory()
-        + (pr.GetValue(prefixOpt) ?? ""));
+    Tree tree = Tree.FromDirectory(Path.Join(Directory.GetCurrentDirectory(), pr.GetValue(prefixOpt) ?? ""));
     tree.Write();
     Console.WriteLine(tree.hash);
 });
 root.Add(writeTreeCommand);
 
-// TODO: commit command
+// commit command
+var msgOpt = new Option<string>("-m")
+    { Description = "Commit message", Required = true };
+Command commitCommand = new("commit",
+    "Commit current directory to main") { msgOpt };
+commitCommand.SetAction(pr =>
+{
+    Commit commit = Commit.FromCurrent(pr.GetValue(msgOpt) ?? "");
+    commit.Write();
+    Console.WriteLine(commit.hash);
+});
+root.Add(commitCommand);
 
 int status = root.Parse(args).Invoke();

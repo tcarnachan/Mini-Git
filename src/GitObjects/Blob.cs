@@ -6,16 +6,16 @@ namespace GitObjects
     {   
         public Blob(string hash) : base(hash)
         {
-            ParseBlob();
+            VerifyBlob();
         }
 
         public Blob(byte[] header, byte[] content) : base(header, content)
         {
-            ParseBlob();
+            VerifyBlob();
         }
 
         // Blob format: blob <size>\0<content>
-        private void ParseBlob()
+        private void VerifyBlob()
         {
             if (header.type != ObjectType.BLOB) throw new InvalidOperationException($"Not a blob: {hash}");
         }
