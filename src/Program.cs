@@ -195,8 +195,8 @@ diffCommand.SetAction(pr =>
         return;
     }
 
-    List<DiffEntry> diffs = pastTree.GetDiff(currTree);
-    foreach (DiffEntry diff in diffs)
+    DiffChecker diffChecker = new DiffChecker();
+    foreach (DiffEntry diff in diffChecker.GetDiff(pastTree, currTree))
     {
         switch (diff.diffType)
         {
