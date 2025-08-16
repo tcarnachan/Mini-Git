@@ -1,4 +1,6 @@
+using System.Dynamic;
 using System.Text;
+using System.Collections.Generic;
 
 namespace GitObjects
 {
@@ -77,6 +79,7 @@ namespace GitObjects
 
             byte[] header = Encoding.UTF8.GetBytes($"tree {treeSize}\0");
             byte[] content = new byte[treeSize];
+            // Sort alphabetically
             int startIx = 0;
             foreach (string entryKey in tree.Keys.OrderBy(k => k))
             {
@@ -86,6 +89,57 @@ namespace GitObjects
             }
 
             return new Tree(header, content);
+        }
+
+        // Returns the difference going from this Tree to other Tree, so a file
+        // in other but not this will be Creating a file and a file in this but
+        // not other will be Deleting a file
+        public List<DiffEntry> GetDiff(Tree other)
+        {
+            List<DiffEntry> diff = new List<DiffEntry>();
+
+            HashSet<TreeEntry> thisSet = [.. entries];
+            var thisLookup = entries.ToDictionary(e => e.name, e => e);
+            HashSet<TreeEntry> otherSet = [.. other.entries];
+            var otherLookup = other.entries.ToDictionary(e => e.name, e => e);
+
+            HashSet<string> inThis = thisSet.Except(otherSet).Select(e => e.name).ToHashSet();
+            HashSet<string> inOther = otherSet.Except(thisSet).Select(e => e.name).ToHashSet();
+
+            foreach (string s in inThis)
+            {
+                if (inOther.Contains(s))
+                {
+                    TreeEntry thisEntry = thisLookup[s];
+                    if (thisEntry.mode == Mode.FILE)
+                    {
+                        diff.Add(new DiffEntry(s, DiffEntry.DiffType.Change));
+                    }
+                    else
+                    {
+                        TreeEntry otherEntry = otherLookup[s];
+                        var dirDiff = new Tree(thisEntry.hash).GetDiff(new Tree(otherEntry.hash));
+                        foreach (DiffEntry diffEntry in dirDiff)
+                        {
+                            string path = Path.Join(s, diffEntry.name);
+                            diff.Add(new DiffEntry(path, diffEntry.diffType));
+                        }
+                    }
+                    inOther.Remove(s);
+                }
+                else
+                {
+                    diff.Add(new DiffEntry(s, DiffEntry.DiffType.Deletion));
+                }
+            }
+
+            foreach (string s in inOther)
+            {
+                diff.Add(new DiffEntry(s, DiffEntry.DiffType.Creation));
+            }
+            
+
+            return diff;
         }
 
         public override void Write(string path = "")
@@ -108,6 +162,20 @@ namespace GitObjects
         }
     }
 
+    public struct DiffEntry
+    {
+        public enum DiffType { Creation, Deletion, Change };
+
+        public string name;
+        public DiffType diffType;
+
+        public DiffEntry(string name, DiffType diffType)
+        {
+            this.name = name;
+            this.diffType = diffType;
+        }
+    }
+
     struct TreeEntry
     {
         public string mode { get; }
@@ -119,6 +187,11 @@ namespace GitObjects
             this.mode = mode;
             this.name = name;
             this.hash = hash;
+        }
+
+        public override int GetHashCode()
+        {
+            return Convert.ToInt32(hash[..8], 16);
         }
     }
 }

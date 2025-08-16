@@ -11,7 +11,7 @@ namespace GitObjects
             get => Path.Join(Directory.GetCurrentDirectory(), ".git/" + MAIN_PATH);
         }
 
-        private Tree tree;
+        public Tree tree { get; private set; }
         private string author, message, timeOffset;
         public string parent { get; private set; }
         private DateTime time;
@@ -115,6 +115,15 @@ namespace GitObjects
                 "Klein Moretti thefool@sefirahcastle.com", now, timeOffset,
                 message.TrimEnd());
             return true;
+        }
+
+        public static string MainCommitHash()
+        {
+            if (File.Exists(mainPath))
+            {
+                return File.ReadAllText(mainPath).Trim();
+            }
+            return "";
         }
 
         public override void Write(string filepath = "")

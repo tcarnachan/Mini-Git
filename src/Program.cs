@@ -157,20 +157,63 @@ root.Add(commitCommand);
 Command logCommand = new("log", "Show commit logs");
 logCommand.SetAction(pr =>
 {
-    if (!File.Exists(Commit.mainPath))
+    string commitHash = Commit.MainCommitHash();
+    if (commitHash == "")
     {
-        Console.WriteLine("fatal: no commits found");
+        Console.WriteLine("Fatal: no commits found");
         return;
     }
-    string commitHash = File.ReadAllText(Commit.mainPath).Trim();
     while (commitHash != "")
     {
-        Console.WriteLine("---");
+        Console.WriteLine("-----");
         Commit commit = new Commit(commitHash);
         Console.WriteLine(commit);
         commitHash = commit.parent;
     }
 });
 root.Add(logCommand);
+
+// diff command
+var commitOpt = new Argument<string>("commit")
+{
+    Arity = ArgumentArity.ZeroOrOne,
+    DefaultValueFactory = pr => Commit.MainCommitHash()
+};
+var nameCommitOpt = new Option<bool>("--name-only")
+    { Description = "Only show the names of the changed files" };
+Command diffCommand = new Command("diff", "Show changes between commits")
+                        { commitOpt, nameCommitOpt };
+diffCommand.SetAction(pr =>
+{
+    Tree currTree = Tree.FromDirectory(Directory.GetCurrentDirectory());
+    currTree.Write();
+    Tree pastTree = new Commit(pr.GetValue(commitOpt) ?? "").tree;
+
+    if (currTree.hash == pastTree.hash)
+    {
+        Console.WriteLine("No changes found");
+        return;
+    }
+
+    List<DiffEntry> diffs = pastTree.GetDiff(currTree);
+    foreach (DiffEntry diff in diffs)
+    {
+        switch (diff.diffType)
+        {
+            case DiffEntry.DiffType.Change:
+                Console.ResetColor();
+                break;
+            case DiffEntry.DiffType.Creation:
+                Console.ForegroundColor = ConsoleColor.Green;
+                break;
+            default:
+                Console.ForegroundColor = ConsoleColor.Red;
+                break;
+        }
+        Console.WriteLine(diff.name);
+    }
+    Console.ResetColor();
+});
+root.Add(diffCommand);
 
 int status = root.Parse(args).Invoke();
