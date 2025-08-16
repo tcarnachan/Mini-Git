@@ -1,6 +1,13 @@
-﻿using GitObjects;
+﻿using DiffChecker;
+using GitObjects;
 using System.CommandLine;
 using System.CommandLine.Parsing;
+
+// var fdc = new FileDiffChecker(true);
+// var printer = new DiffPrinter();
+
+// printer.PrintFile(fdc);
+// return;
 
 void ValidateExactlyOne(CommandResult res, params Option[] opts)
 {
@@ -176,18 +183,22 @@ root.Add(logCommand);
 // diff command
 var commitOpt = new Argument<string>("commit")
 {
-    Arity = ArgumentArity.ZeroOrOne,
-    DefaultValueFactory = pr => Commit.MainCommitHash()
+    Arity = ArgumentArity.ZeroOrOne
 };
 var nameCommitOpt = new Option<bool>("--name-only")
     { Description = "Only show the names of the changed files" };
+var summaryCommitOpt = new Option<bool>("--compact-summary")
+    { Description = "Show the file names and a summary of the changes" };
 Command diffCommand = new Command("diff", "Show changes between commits")
-                        { commitOpt, nameCommitOpt };
+                        { nameCommitOpt, summaryCommitOpt };
+diffCommand.Validators.Add(res => ValidateAtMostOne(res, nameCommitOpt, summaryCommitOpt));
 diffCommand.SetAction(pr =>
 {
     Tree currTree = Tree.FromDirectory(Directory.GetCurrentDirectory());
     currTree.Write();
-    Tree pastTree = new Commit(pr.GetValue(commitOpt) ?? "").tree;
+
+    string commitHash = pr.GetValue(commitOpt) ?? Commit.MainCommitHash();
+    Tree pastTree = new Commit(commitHash).tree;
 
     if (currTree.hash == pastTree.hash)
     {
@@ -195,24 +206,17 @@ diffCommand.SetAction(pr =>
         return;
     }
 
-    DiffChecker diffChecker = new DiffChecker();
-    foreach (DiffEntry diff in diffChecker.GetDiff(pastTree, currTree))
+    DirDiffChecker diffChecker = new DirDiffChecker(pastTree, currTree);
+    DiffPrinter printer = new DiffPrinter();
+
+    if (pr.GetValue(nameCommitOpt))
     {
-        switch (diff.diffType)
-        {
-            case DiffEntry.DiffType.Change:
-                Console.ResetColor();
-                break;
-            case DiffEntry.DiffType.Creation:
-                Console.ForegroundColor = ConsoleColor.Green;
-                break;
-            default:
-                Console.ForegroundColor = ConsoleColor.Red;
-                break;
-        }
-        Console.WriteLine(diff.name);
+        printer.PrintNames(diffChecker);
     }
-    Console.ResetColor();
+    else if (pr.GetValue(summaryCommitOpt))
+    {
+        printer.PrintSummary(diffChecker);
+    }
 });
 root.Add(diffCommand);
 
