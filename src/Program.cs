@@ -166,9 +166,8 @@ logCommand.SetAction(pr =>
     }
     while (commitHash != "")
     {
-        Console.WriteLine("-----");
         Commit commit = new Commit(commitHash);
-        Console.WriteLine(commit);
+        commit.Print();
         commitHash = commit.parent;
     }
 });

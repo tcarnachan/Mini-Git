@@ -4,6 +4,9 @@ namespace GitObjects
 {
     class Commit : GitObject
     {
+        // hard coded for now
+        private const string AUTHOR = "Klein Moretti <thefool@sefirahcastle.com>";
+
         public const string MAIN_PATH = "refs/heads/main";
         public static string mainPath
         {
@@ -38,8 +41,7 @@ namespace GitObjects
             time = DateTime.UnixEpoch.AddSeconds(long.Parse(date));
 
             string[] authorInfo = authorLine[1..(authorLine.Length - 2)];
-            author = string.Join(" ", authorInfo[..(authorInfo.Length - 1)])
-                        + $" <{authorInfo.Last()}>";
+            author = string.Join(" ", authorInfo);
         }
 
         public Commit(byte[] header, byte[] contents,
@@ -99,9 +101,8 @@ namespace GitObjects
             long time = ((DateTimeOffset)now).ToUnixTimeSeconds();
             TimeSpan delta = TimeZoneInfo.Local.GetUtcOffset(DateTime.Now);
             string timeOffset = $"{(delta.TotalMinutes >= 0 ? '+' : '-')}{delta.Hours:D2}{delta.Minutes:D2}";
-            // hard coded for now
-            sb.AppendFormat("author Klein Moretti thefool@sefirahcastle.com {0} {1}\n", time, timeOffset);
-            sb.AppendFormat("committer Klein Moretti thefool@sefirahcastle.com {0} {1}\n\n", time, timeOffset);
+            sb.AppendFormat("author {0} {1} {2}\n", AUTHOR, time, timeOffset);
+            sb.AppendFormat("committer {0} {1} {2}\n\n", AUTHOR, time, timeOffset);
 
             // commit message
             sb.Append(message.TrimEnd());
@@ -111,8 +112,7 @@ namespace GitObjects
             byte[] header = Encoding.UTF8.GetBytes($"commit {content.Length}\0");
 
             commit = new Commit(header, content, tree, parentHash,
-                "Klein Moretti thefool@sefirahcastle.com", now, timeOffset,
-                message.TrimEnd());
+                AUTHOR, now, timeOffset, message.TrimEnd() + "\n");
             return true;
         }
 
@@ -135,14 +135,16 @@ namespace GitObjects
             File.WriteAllText(mainPath, hash);
         }
 
-        public override string ToString()
+        public void Print()
         {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"commit {hash}");
-            sb.AppendLine($"Author: {author}");
-            sb.AppendLine($"Date: {time.ToLongDateString().Replace(",", "")} {timeOffset}");
-            sb.AppendLine($"\n{string.Join('\n', message.Split('\n').Select(l => "\t" + l))}");
-            return sb.ToString();
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine($"commit {hash}");
+            Console.ResetColor();
+            Console.WriteLine($"Author: {author}");
+            string date = time.ToLongDateString().Replace(",", "");
+            Console.WriteLine($"Date: {date} {timeOffset}");
+            var msgLines = message.Split('\n').Select(l => "\t" + l);
+            Console.WriteLine($"\n{string.Join('\n', msgLines)}\n");
         }
     }
 }
