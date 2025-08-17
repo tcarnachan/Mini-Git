@@ -3,12 +3,6 @@ using GitObjects;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
-// var fdc = new FileDiffChecker(true);
-// var printer = new DiffPrinter();
-
-// printer.PrintFile(fdc);
-// return;
-
 void ValidateExactlyOne(CommandResult res, params Option[] opts)
 {
     if (opts.Count(opt => res.GetResult(opt) is not null) != 1)
@@ -216,6 +210,13 @@ diffCommand.SetAction(pr =>
     else if (pr.GetValue(summaryCommitOpt))
     {
         printer.PrintSummary(diffChecker);
+    }
+    else
+    {
+        foreach (FileDiff fd in diffChecker.diffs)
+        {
+            printer.PrintFile(fd);
+        }
     }
 });
 root.Add(diffCommand);
