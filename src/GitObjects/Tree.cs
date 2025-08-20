@@ -37,7 +37,7 @@ namespace GitObjects
             }
 
             byte[] entries = content;
-            while (entries.Length > 0 && entries.Any(b => b != 0))
+            while (entries.Length > 0)
             {
                 // Get until next null byte
                 int split = Array.IndexOf(entries, (byte)0);

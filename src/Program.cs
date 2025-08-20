@@ -232,8 +232,9 @@ cloneCommand.SetAction(async pr =>
     Init();
     GitRequest gr = new GitRequest(pr.GetValue(cloneArg) ?? "");
     string hash = await gr.GetMainHash();
-    Console.WriteLine(hash);
-    GitObject[] gitObjects = await gr.GetPack(hash);
+    (byte[] contents, int numObjects) = await gr.GetPackContent(hash);
+    Packfile packfile = new Packfile(contents, numObjects);
+    packfile.Write(hash);
 });
 root.Add(cloneCommand);
 

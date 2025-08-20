@@ -15,7 +15,7 @@ namespace GitObjects
         }
 
         private Tree? _tree;
-        private string treeHash;
+        public string treeHash { get; private set; }
         public Tree tree
         {
             get
