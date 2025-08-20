@@ -1,5 +1,6 @@
 ﻿using DiffChecker;
 using GitObjects;
+using Requests;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
@@ -174,7 +175,7 @@ logCommand.SetAction(pr =>
 root.Add(logCommand);
 
 // diff command
-var commitOpt = new Argument<string>("commit")
+var commitArg = new Argument<string>("commit")
 {
     Arity = ArgumentArity.ZeroOrOne
 };
@@ -190,7 +191,7 @@ diffCommand.SetAction(pr =>
     Tree currTree = Tree.FromDirectory(Directory.GetCurrentDirectory());
     currTree.Write();
 
-    string commitHash = pr.GetValue(commitOpt) ?? Commit.MainCommitHash();
+    string commitHash = pr.GetValue(commitArg) ?? Commit.MainCommitHash();
     Tree pastTree = new Commit(commitHash).tree;
 
     if (currTree.hash == pastTree.hash)
@@ -219,5 +220,18 @@ diffCommand.SetAction(pr =>
     }
 });
 root.Add(diffCommand);
+
+// clone command
+var cloneArg = new Argument<string>("repo")
+    { Arity = ArgumentArity.ExactlyOne };
+var cloneCommand = new Command("clone",
+    "Clone a repository into a new directory") { cloneArg };
+cloneCommand.SetAction(async pr =>
+{
+    GitRequest gr = new GitRequest(pr.GetValue(cloneArg) ?? "");
+    string hash = await gr.GetMainHash();
+    await gr.GetPack(hash);
+});
+root.Add(cloneCommand);
 
 int status = root.Parse(args).Invoke();

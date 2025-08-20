@@ -2,7 +2,7 @@
 
 A git implementation written in c#.
 
-Currently it doesn't have 'staging area' so all files in the current working directory are staged.
+Currently it only supports a single branch and assumes all files in the current working directory are staged.
 
 ## Supported commands
 | Command | Description |
@@ -19,3 +19,8 @@ Currently it doesn't have 'staging area' so all files in the current working dir
 | hash-object | Compute object hash and optionally create an object from a file |
 | ls-tree | List the contents of a tree object |
 | write-tree | Create a tree object from the current directory |
+
+## To implement
+- clone
+- push
+- pull
