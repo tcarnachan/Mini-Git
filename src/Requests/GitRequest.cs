@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using GitObjects;
 using ZLibDotNet;
 
 namespace Requests
@@ -48,7 +49,7 @@ namespace Requests
             return [.. Encoding.UTF8.GetBytes(size), .. lineBytes];
         }
 
-        public async Task<byte[]> GetPack(string hash)
+        public async Task<GitObject[]> GetPack(string hash)
         {
             string target = "git-upload-pack";
 
@@ -80,6 +81,9 @@ namespace Requests
             Console.WriteLine($"Header: v{version} #{numObjects}");
 
             // Content
+            GitObject[] gitObjects = new GitObject[numObjects];
+            List<(int, byte[])> trees = new List<(int, byte[])>();
+            List<(int, byte[])> commits = new List<(int, byte[])>();
             byte[] contentBytes = packfile[12..];
             using MemoryStream contentStream = new MemoryStream(contentBytes);
             for (int i = 0; i < numObjects; i++)
@@ -93,7 +97,8 @@ namespace Requests
                 switch ((PackObject)type)
                 {
                     case PackObject.REF_DELTA:
-                        contentStream.Seek(20, SeekOrigin.Current);
+                        byte[] baseObj = new byte[20];
+                        contentStream.Read(baseObj);
                         break;
                     case PackObject.OFS_DELTA:
                         throw new NotImplementedException(
@@ -114,12 +119,24 @@ namespace Requests
 
                 contentStream.Seek(zStream.NextIn, SeekOrigin.Current);
 
-                string contentStr = Encoding.UTF8.GetString(bytes);
-                Console.WriteLine(contentStr);
-                Console.ReadKey();
+                switch ((PackObject)type)
+                {
+                    case PackObject.BLOB:
+                        gitObjects[i] = Blob.FromContent(bytes);
+                        break;
+                    case PackObject.TREE:
+                        gitObjects[i] = Tree.FromContent(bytes);
+                        break;
+                    case PackObject.COMMIT:
+                        gitObjects[i] = Commit.FromContent(bytes);
+                        break;
+                    case PackObject.REF_DELTA:
+                        // To implement
+                        break;
+                }
             }
 
-            return [];
+            return gitObjects;
         }
 
         private int ReadVarLenInt(MemoryStream stream)

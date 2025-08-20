@@ -3,7 +3,7 @@ using System.Text;
 namespace GitObjects
 {
     class Blob : GitObject
-    {   
+    {
         public Blob(string hash) : base(hash)
         {
             VerifyBlob();
@@ -25,7 +25,13 @@ namespace GitObjects
         {
             string fileContent = File.ReadAllText(filename);
             byte[] content = Encoding.UTF8.GetBytes(fileContent);
-            byte[] header = Encoding.UTF8.GetBytes($"blob {content.Length}\0");
+            byte[] header = Encoding.UTF8.GetBytes($"{ObjectType.BLOB} {content.Length}\0");
+            return new Blob(header, content);
+        }
+
+        public static Blob FromContent(byte[] content)
+        {
+            byte[] header = Encoding.UTF8.GetBytes($"{ObjectType.BLOB} {content.Length}\0");
             return new Blob(header, content);
         }
     }

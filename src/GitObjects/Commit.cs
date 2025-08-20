@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace GitObjects
@@ -13,7 +14,16 @@ namespace GitObjects
             get => Path.Join(Directory.GetCurrentDirectory(), ".git/" + MAIN_PATH);
         }
 
-        public Tree tree { get; private set; }
+        private Tree? _tree;
+        private string treeHash;
+        public Tree tree
+        {
+            get
+            {
+                if (_tree == null) _tree = new Tree(treeHash);
+                return _tree;
+            }
+        }
         private string author, message, timeOffset;
         public string parent { get; private set; }
         private DateTime time;
@@ -21,14 +31,46 @@ namespace GitObjects
         public Commit(string hash) : base(hash)
         {
             VerifyCommit();
+            PopulateCommit();
+        }
 
+        public Commit(byte[] header, byte[] content) : base(header, content)
+        {
+            VerifyCommit();
+            PopulateCommit();
+        }
+
+        public Commit(byte[] header, byte[] contents,
+            Tree tree, string parent, string author,
+            DateTime time, string timeOffset, string message) : base(header, contents)
+        {
+            VerifyCommit();
+
+            this._tree = tree;
+            this.treeHash = tree.hash;
+            this.parent = parent;
+            this.author = author;
+            this.parent = parent;
+            this.time = time;
+            this.timeOffset = timeOffset;
+            this.message = message;
+        }
+
+        private void VerifyCommit()
+        {
+            if (header.type != ObjectType.COMMIT) throw new InvalidOperationException($"Not a commit: {hash}");
+        }
+
+        [MemberNotNull("message", "treeHash", "parent", "timeOffset", "time", "author")]
+        private void PopulateCommit()
+        {
             // Last lines, may contain several lines
             string[] content = GetContentString().Split("\n\n");
             message = content[1];
 
             // Get tree
             content = content[0].Split('\n');
-            tree = new Tree(content[0].Split()[1]);
+            treeHash = content[0].Split()[1];
 
             // Get parent, if it exists
             if (content[1].StartsWith("parent")) parent = content[1].Split()[1];
@@ -42,26 +84,6 @@ namespace GitObjects
 
             string[] authorInfo = authorLine[1..(authorLine.Length - 2)];
             author = string.Join(" ", authorInfo);
-        }
-
-        public Commit(byte[] header, byte[] contents,
-            Tree tree, string parent, string author,
-            DateTime time, string timeOffset, string message) : base(header, contents)
-        {
-            VerifyCommit();
-
-            this.tree = tree;
-            this.parent = parent;
-            this.author = author;
-            this.parent = parent;
-            this.time = time;
-            this.timeOffset = timeOffset;
-            this.message = message;
-        }
-
-        private void VerifyCommit()
-        {
-            if (header.type != ObjectType.COMMIT) throw new InvalidOperationException($"Not a commit: {hash}");
         }
 
         /*
@@ -109,11 +131,17 @@ namespace GitObjects
 
             // Get bytes
             byte[] content = Encoding.UTF8.GetBytes(sb.ToString());
-            byte[] header = Encoding.UTF8.GetBytes($"commit {content.Length}\0");
+            byte[] header = Encoding.UTF8.GetBytes($"{ObjectType.COMMIT} {content.Length}\0");
 
             commit = new Commit(header, content, tree, parentHash,
                 AUTHOR, now, timeOffset, message.TrimEnd() + "\n");
             return true;
+        }
+
+        public static Commit FromContent(byte[] content)
+        {
+            byte[] header = Encoding.UTF8.GetBytes($"{ObjectType.COMMIT} {content.Length}\0");
+            return new Commit(header, content);
         }
 
         public static string MainCommitHash()

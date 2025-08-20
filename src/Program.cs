@@ -25,15 +25,16 @@ void ValidateAtMostOne(CommandResult res, params Option[] opts)
 RootCommand root = new("Mini-Git");
 
 // init command
-Command initCommand = new("init", "Initialise a new repository");
-initCommand.SetAction(pr =>
+void Init()
 {
     Directory.CreateDirectory(".git");
     Directory.CreateDirectory(".git/objects");
     Directory.CreateDirectory(".git/refs");
     File.WriteAllText(".git/HEAD", $"ref: {Commit.MAIN_PATH}\n");
     Console.WriteLine("Initialized git directory");
-});
+}
+Command initCommand = new("init", "Initialise a new repository");
+initCommand.SetAction(pr => Init());
 root.Add(initCommand);
 
 // cat-file command
@@ -228,9 +229,11 @@ var cloneCommand = new Command("clone",
     "Clone a repository into a new directory") { cloneArg };
 cloneCommand.SetAction(async pr =>
 {
+    Init();
     GitRequest gr = new GitRequest(pr.GetValue(cloneArg) ?? "");
     string hash = await gr.GetMainHash();
-    await gr.GetPack(hash);
+    Console.WriteLine(hash);
+    GitObject[] gitObjects = await gr.GetPack(hash);
 });
 root.Add(cloneCommand);
 
