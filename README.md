@@ -11,6 +11,7 @@ Currently it only supports a single branch and assumes all files in the current 
 | commit | Commit current directory to main |
 | log | Show commit logs |
 | diff | Show changes between commits |
+| clone | Clone a repository into the current directory |
 
 ## Plumbing commands
 | Command | Description |
@@ -21,6 +22,5 @@ Currently it only supports a single branch and assumes all files in the current 
 | write-tree | Create a tree object from the current directory |
 
 ## To implement
-- clone
 - push
 - pull

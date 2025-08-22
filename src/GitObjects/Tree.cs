@@ -99,7 +99,7 @@ namespace GitObjects
             return new Tree(header, content);
         }
 
-        public override void Write(string path = "")
+        protected override void WriteSubfiles(string path = "")
         {
             foreach (TreeEntry entry in entries)
             {
@@ -107,7 +107,6 @@ namespace GitObjects
                 if (entry.mode == Mode.DIR) FromDirectory(filepath).Write(filepath);
                 else Blob.FromFile(filepath).Write();
             }
-            base.Write();
         }
 
         public IEnumerable<TreeEntry> Entries()

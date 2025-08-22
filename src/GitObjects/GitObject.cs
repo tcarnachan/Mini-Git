@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
+using System.Runtime.InteropServices.Marshalling;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -78,7 +79,7 @@ namespace GitObjects
         }
 
         // Write object to the .git/objects folder
-        public virtual void Write(string path = "")
+        public void Write(string path = "", bool writeSubfiles = true)
         {
             Directory.CreateDirectory(dir);
 
@@ -86,7 +87,11 @@ namespace GitObjects
                                             FileMode.Create, FileAccess.Write);
             using ZLibStream zlStream = new ZLibStream(fStream, CompressionMode.Compress);
             zlStream.Write([.. headerBytes, .. content]);
+
+            if (writeSubfiles) WriteSubfiles();
         }
+
+        protected virtual void WriteSubfiles(string path = "") { }
 
         public string GetContentString() => Encoding.UTF8.GetString(content);
     }

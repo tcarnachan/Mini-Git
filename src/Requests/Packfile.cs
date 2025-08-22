@@ -8,11 +8,10 @@ namespace Requests
     {
         Dictionary<string, GitObject> lookup = new Dictionary<string, GitObject>();
         Dictionary<string, PackObject> typeLookup = new Dictionary<string, PackObject>();
-        List<DeltaObject> deltas = new List<DeltaObject>();
 
         public Packfile(byte[] contentBytes, int numObjects)
         {
-            // Content
+            List<DeltaObject> deltas = new List<DeltaObject>();
             using MemoryStream contentStream = new MemoryStream(contentBytes);
             for (int i = 0; i < numObjects; i++)
             {
@@ -69,10 +68,10 @@ namespace Requests
                 }
             }
 
-            ReadDeltas();
+            ReadDeltas(deltas);
         }
 
-        private void ReadDeltas()
+        private void ReadDeltas(List<DeltaObject> deltas)
         {
             while (deltas.Count > 0)
             {
@@ -158,8 +157,39 @@ namespace Requests
             // Commit tree should be current directory
             Commit mainCommit = (Commit)lookup[mainHash];
             Tree currDir = (Tree)lookup[mainCommit.treeHash];
+            // Write files to current directory and .git/objects
+            WriteDir(currDir);
+            foreach ((string hash, PackObject type) in typeLookup)
+            {
+                if (type == PackObject.COMMIT)
+                {
+                    lookup[hash].Write(writeSubfiles: false);
+                }
+            }
+            // Update head
+            Directory.CreateDirectory(Path.GetDirectoryName(Commit.mainPath) ?? "");
+            File.WriteAllText(Commit.mainPath, mainCommit.hash);
+        }
 
-            Console.WriteLine(currDir.GetContentString());
+        private void WriteDir(Tree tree, string dir = "")
+        {
+            tree.Write(writeSubfiles: false);
+            foreach (TreeEntry entry in tree.Entries())
+            {
+                GitObject go = lookup[entry.hash];
+                go.Write(writeSubfiles: false);
+                if (entry.mode == Tree.Mode.FILE)
+                {
+                    string content = go.GetContentString();
+                    File.WriteAllText(Path.Join(dir, entry.name), content);
+                }
+                else if (entry.mode == Tree.Mode.DIR)
+                {
+                    string newDir = Path.Join(dir, entry.name);
+                    Directory.CreateDirectory(newDir);
+                    WriteDir((Tree)go, newDir);
+                }
+            }
         }
 
         private GitObject FromContent(PackObject type, byte[] bytes)

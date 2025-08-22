@@ -153,9 +153,8 @@ namespace GitObjects
             return "";
         }
 
-        public override void Write(string filepath = "")
+        protected override void WriteSubfiles(string filepath = "")
         {
-            base.Write();
             // Write the current directory
             tree.Write();
             // Update head
