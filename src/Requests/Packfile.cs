@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GitObjects;
 using ZLibDotNet;
 
@@ -7,12 +8,10 @@ namespace Requests
     {
         Dictionary<string, GitObject> lookup = new Dictionary<string, GitObject>();
         Dictionary<string, PackObject> typeLookup = new Dictionary<string, PackObject>();
+        List<DeltaObject> deltas = new List<DeltaObject>();
 
         public Packfile(byte[] contentBytes, int numObjects)
         {
-            // Debugging stuff
-            List<string> toLookup = new List<string>();
-
             // Content
             using MemoryStream contentStream = new MemoryStream(contentBytes);
             for (int i = 0; i < numObjects; i++)
@@ -65,23 +64,93 @@ namespace Requests
                         break;
                     case PackObject.REF_DELTA:
                         string baseHash = Convert.ToHexStringLower(baseObj);
-                        toLookup.Add(baseHash);
+                        deltas.Add(new DeltaObject(baseHash, bytes));
                         break;
                 }
             }
 
-            // Debugging
-            foreach (string h in toLookup)
+            ReadDeltas();
+        }
+
+        private void ReadDeltas()
+        {
+            while (deltas.Count > 0)
             {
-                if (typeLookup.ContainsKey(h))
+                // Some deltas reference other deltas
+                // so first do the ones that don't
+                int decoded = 0;
+                for (int i = 0; i < deltas.Count; i++)
                 {
-                    Console.WriteLine($"REF_DELTA referencing {typeLookup[h]}");
+                    if (lookup.ContainsKey(deltas[i].baseHash))
+                    {
+                        ReadDelta(deltas[i]);
+                        decoded++;
+                        deltas.RemoveAt(i);
+                        i--;
+                    }
                 }
-                else
+                // Don't infinitely loop
+                if (decoded == 0)
                 {
-                    Console.WriteLine($"Could not look up REF_DELTA {h}");
+                    throw new Exception("Error decoding deltafied objects");
                 }
             }
+        }
+
+        /*
+            Format:
+            <variable length base size><variable length result size><copy or add instructions>
+            Copy instructions: <1xxxxxxx><offset (<= 4 bytes)><size (<= 3 bytes)>
+            Add instructions: <0xxxxxxx><data>
+        */
+        private void ReadDelta(DeltaObject delta)
+        {
+            using MemoryStream mStream = new MemoryStream(delta.content);
+            int baseSize = ReadVarLenInt(mStream);
+            int resSize = ReadVarLenInt(mStream);
+
+            byte[] baseBytes = lookup[delta.baseHash].content;
+            Debug.Assert(baseSize == baseBytes.Length);
+            byte[] resBytes = new byte[resSize];
+
+            int index = 0, instr;
+            while ((instr = mStream.ReadByte()) != -1)
+            {
+                // Copy instruction
+                if ((instr & 0x80) > 0)
+                {
+                    int offset = 0, size = 0, shift;
+                    for (shift = 0; shift < 4; shift++)
+                    {
+                        if ((instr & (1 << shift)) != 0)
+                        {
+                            offset |= mStream.ReadByte() << (shift * 8);
+                        }
+                    }
+                    for (; shift < 7; shift++)
+                    {
+                        if ((instr & (1 << shift)) != 0)
+                        {
+                            size |= mStream.ReadByte() << ((shift - 4) * 8);
+                        }
+                    }
+                    if (size == 0) size = 0x10000;
+                    Array.Copy(baseBytes, offset, resBytes, index, size);
+                    index += size;
+                }
+                // Add instruction
+                else
+                {
+                    int toAdd = instr & 0x7F;
+                    mStream.ReadExactly(resBytes, index, toAdd);
+                    index += toAdd;
+                }
+            }
+
+            PackObject type = typeLookup[delta.baseHash];
+            GitObject obj = FromContent(type, resBytes);
+            lookup[obj.hash] = obj;
+            typeLookup[obj.hash] = type;
         }
 
         public void Write(string mainHash)
@@ -92,7 +161,7 @@ namespace Requests
 
             Console.WriteLine(currDir.GetContentString());
         }
-        
+
         private GitObject FromContent(PackObject type, byte[] bytes)
             => type switch
             {
@@ -122,5 +191,17 @@ namespace Requests
             OFS_DELTA = 6,
             REF_DELTA = 7
         };
+    }
+
+    struct DeltaObject
+    {
+        public string baseHash;
+        public byte[] content;
+
+        public DeltaObject(string baseHash, byte[] content)
+        {
+            this.baseHash = baseHash;
+            this.content = content;
+        }
     }
 }
