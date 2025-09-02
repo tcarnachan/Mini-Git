@@ -15,9 +15,9 @@ namespace Requests
             };
         }
 
-        public async Task<string> GetMainHash()
+        public async Task<string> GetMainHash(string service)
         {
-            string target = "info/refs?service=git-upload-pack";
+            string target = $"info/refs?service={service}";
             using HttpResponseMessage response = await client.GetAsync(target);
             response.EnsureSuccessStatusCode();
 
@@ -33,7 +33,7 @@ namespace Requests
             string responseBody = await response.Content.ReadAsStringAsync();
             string[] lines = responseBody.Split('\n');
 
-            Debug.Assert(lines[0] == "001e# service=git-upload-pack");
+            Debug.Assert(lines[0].EndsWith($"# service={service}"));
             Debug.Assert(lines.Last() == "0000");
 
             return lines[1].Split()[0][8..];

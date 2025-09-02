@@ -49,7 +49,8 @@ namespace Requests
 
                 // Ignore trailing null bytes
                 int end;
-                for (end = size; bytes[end - 1] == 0; end--) { }
+                for (end = bytes.Length; end > 0 && bytes[end - 1] == 0; end--) { }
+                if(end == 0) continue;
                 bytes = bytes[..end];
 
                 switch (type)
